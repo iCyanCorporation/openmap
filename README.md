@@ -1,6 +1,3 @@
-Here's an updated `README.md` for your `openmap` project:
-
-```markdown
 # OpenMap
 
 OpenMap is a web platform designed for testing and visualizing map data. Users can upload CSV files containing geographical data and view the information interactively on a map.
