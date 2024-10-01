@@ -1,5 +1,6 @@
 # OpenMap
-![Uploading openmap-ezgif.com-resize.gif…]()
+
+![openmap-ezgif com-resize](https://github.com/user-attachments/assets/da8ccc61-a8b1-4064-9ae7-7fcfc3e23486)
 
 OpenMap is a web platform designed for testing and visualizing map data. Users can upload CSV files containing geographical data and view the information interactively on a map.
 
