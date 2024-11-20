@@ -33,7 +33,7 @@ export interface Marker {
 }
 
 export interface UploadPanelProps {
-  onFileUpload: (data: Record<string, unknown>[]) => void;
+ 
 }
 
 

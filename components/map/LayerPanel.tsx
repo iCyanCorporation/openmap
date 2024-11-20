@@ -1,6 +1,6 @@
 "use client"
 
-import React, { useCallback, useState } from 'react';
+import React, { useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -25,7 +25,9 @@ import {
 } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 
-interface LayerPanelProps {}
+interface LayerPanelProps {
+  className?: string;
+}
 
 interface SortableItemProps {
   id: string;
@@ -91,7 +93,7 @@ const SortableItem = ({ id, name, dataLength, visible, onToggle, onDelete }: Sor
   
 };
 
-const LayerPanel: React.FC<LayerPanelProps> = () => {
+const LayerPanel: React.FC<LayerPanelProps> = ({ className }) => {
   const { updateFeatures, layers, toggleLayerVisibility, deleteLayer, updateLayersOrder, map } = useMapContext();
   const [isOpen, setIsOpen] = React.useState(false);
   const [selectedBaseMap, setSelectedBaseMap] = React.useState<string[]>(["test1"]);
@@ -177,7 +179,7 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
   }
   
   return (
-    <div className=''>
+    <div className={`${className}`}>
       <Button
         variant="default"
         size="icon"
@@ -187,7 +189,7 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
       </Button>
 
       {isOpen && (
-        <Card className="w-[300px] p-0 mt-1">
+        <Card className="w-[300px] max-h-[80vh] overflow-y-auto p-0 mt-1">
         <CardHeader className="pb-3">
           <div className="flex items-center space-x-2">
             <LayersIcon className="h-5 w-5" />
