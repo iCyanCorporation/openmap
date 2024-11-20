@@ -16,6 +16,7 @@ export type MultiPolygon = {
 export type Geometry = Point | Polygon | MultiPolygon;
 
 export interface GeoJSONFeature {
+  id?: string;
   type: 'Feature';
   geometry: Geometry;
   properties: Record<string, unknown>;
