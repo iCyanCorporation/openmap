@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./map.css";
-import { GeoJSONFeature, Marker, MapComponentProps } from "./types";
+import { GeoJSONFeature, Marker, MapComponentProps } from "../type/types";
 import { useMapContext } from "../context/MapContext";
 
 const MapComponent: React.FC<MapComponentProps> = ({ markers }) => {

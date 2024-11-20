@@ -4,7 +4,7 @@ import { parse } from "papaparse";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { MenuIcon, UploadIcon } from "lucide-react";
-import { GeoJSONFeature, UploadPanelProps } from "./types";
+import { GeoJSONFeature, UploadPanelProps } from "@/components/type/types";
 
 import {
   AlertDialog,
@@ -174,7 +174,7 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
   };
 
   return (
-    <div className="absolute top-4 left-4 z-10">
+    <div className="">
       {/* <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="default" size="icon">
@@ -213,10 +213,10 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
           <Button style={{ display: "none" }}>Open Dialog</Button>
         </AlertDialogTrigger>
         <AlertDialogContent
-          className="bg-primary"
+          className=""
           aria-describedby="alert-dialog-description"
         >
-          <AlertDialogTitle>Edit</AlertDialogTitle>
+          <AlertDialogTitle>Add Data</AlertDialogTitle>
           <AlertDialogHeader>
             <h2>Select Fields</h2>
             <p>Please select the fields for Latitude, Longitude, and Name.</p>
@@ -294,11 +294,7 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <LayerPanel 
-        layers={layers}
-        onToggleLayer={toggleLayerVisibility}
-        onDeleteLayer={deleteLayer}
-      />
+      
     </div>
   );
 };

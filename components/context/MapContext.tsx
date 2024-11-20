@@ -2,7 +2,7 @@
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import maplibregl, { Map, GeoJSONSource, LngLatBounds, Popup } from 'maplibre-gl';
-import { GeoJSONFeature } from '../map/types';
+import { GeoJSONFeature } from '../type/types';
 
 interface MapContextType {
   map: Map | null;
