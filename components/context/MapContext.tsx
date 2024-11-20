@@ -1,7 +1,7 @@
 "use client"
 
 import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
-import maplibregl, { Map, GeoJSONSource, LngLatBounds, Popup } from 'maplibre-gl';
+import maplibregl, { Map, GeoJSONSource, Popup } from 'maplibre-gl';
 import { GeoJSONFeature } from '../type/types';
 
 interface MapContextType {
@@ -39,7 +39,7 @@ interface MapProviderProps {
 
 export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{children: React.ReactNode}) => {
   const [map, setMap] = useState<Map | null>(null);
-  const [popup, setPopup] = useState<Popup | null>(null);
+  // const [popup, setPopup] = useState<Popup | null>(null);
   const [layers, setLayers] = useState<Layer[]>([]);
 
   // Initialize map
@@ -76,7 +76,7 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
       closeOnClick: false
     });
 
-    setPopup(newPopup);
+    // setPopup(newPopup);
     newMap.addControl(new maplibregl.NavigationControl());
 
     // Add GeoJSON source and layers
