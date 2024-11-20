@@ -3,6 +3,7 @@
 import { useState } from "react";
 import MapComponent from "@/components/map/MapComponent";
 import UploadPanel from "@/components/map/UploadPanel";
+import LayerPanel from "@/components/map/LayerPanel";
 
 const HomePage = () => {
   const [markers, setMarkers] = useState<
@@ -24,7 +25,10 @@ const HomePage = () => {
       width: "100vw",
       height: "100vh"
     }}>
+      <div className="absolute top-4 left-4 z-10 gap-2 flex flex-col">
       <UploadPanel onFileUpload={handleFileUpload} />
+      <LayerPanel />
+      </div>
       <MapComponent markers={markers} />
     </div>
   );

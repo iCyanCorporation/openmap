@@ -52,6 +52,19 @@ OpenMap is a web platform designed for testing and visualizing map data. Users c
 2. Select the relevant columns for each field.
 3. View the data points on the map, with pop-up information on hover.
 
+## OpenData
+### 重ねるハザードマップ
+https://disaportal.gsi.go.jp/hazardmap/maps/index.html
+
+### 地理院タイル
+https://maps.gsi.go.jp/
+
+### 警視庁犯罪情報マップ 
+https://map.digipolice.jp/
+
+### ハザードマップポータルサイト
+https://disaportal.gsi.go.jp/hazardmap/copyright/opendata.html
+
 ## Contributing
 
 Contributions are welcome! Please fork this repository and submit a pull request with your improvements or features.

@@ -4,7 +4,7 @@ import { parse } from "papaparse";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { MenuIcon, UploadIcon } from "lucide-react";
-import { GeoJSONFeature, UploadPanelProps } from "./types";
+import { GeoJSONFeature, UploadPanelProps } from "@/components/type/types";
 
 import {
   AlertDialog,
@@ -25,15 +25,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-
 import { useMapContext } from "../context/MapContext";
-import LayerPanel from './LayerPanel';
 
 const UploadPanel: React.FC<UploadPanelProps> = () => {
   const { toast } = useToast();
@@ -46,35 +38,37 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
   const [csvData, setCsvData] = useState<Record<string, unknown>[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
 
+  const latitude_list = ["latitude", "lat", "緯度"];
+  const longitude_list = ["longitude", "lng", "lon", "経度"];
 
+  const findColumnByList = (headers: string[], possibleNames: string[]) => {
+    return headers.find(header => 
+      possibleNames.some(name => header.toLowerCase().includes(name.toLowerCase()))
+    );
+  };
 
   const processFile = useCallback((file: File) => {
     const fileExtension = file.name.split('.').pop()?.toLowerCase();
     
     if (fileExtension === 'geojson' || fileExtension === 'json') {
-      console.log('Parsing GeoJSON file:', file);
-
       const reader = new FileReader();
-      reader.onload = (event: ProgressEvent<FileReader>) => {
+      reader.onload = (e) => {
         try {
-          const jsonData = JSON.parse(event.target?.result as string);
-          if (jsonData.type === 'FeatureCollection' && Array.isArray(jsonData.features)) {
-            updateFeatures(jsonData.features, file.name);
+          const geojson = JSON.parse(e.target?.result as string);
+          if (geojson.type === 'FeatureCollection') {
+            updateFeatures(geojson.features, 'places');
             toast({
               title: "Success",
-              description: `Loaded ${jsonData.features.length} features from GeoJSON`,
-            });
-          } else if (jsonData.type === 'Feature') {
-            updateFeatures([jsonData], file.name);
-            toast({
-              title: "Success",
-              description: "Loaded 1 feature from GeoJSON",
+              description: "GeoJSON file uploaded successfully",
             });
           } else {
-            throw new Error('Invalid GeoJSON format');
+            toast({
+              title: "Error",
+              description: "Invalid GeoJSON format",
+              variant: "destructive",
+            });
           }
         } catch (error) {
-          console.error('Error parsing GeoJSON:', error);
           toast({
             title: "Error",
             description: "Failed to parse GeoJSON file",
@@ -84,36 +78,31 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
       };
       reader.readAsText(file);
     } else if (fileExtension === 'csv') {
-      console.log('Parsing CSV file:', file);
-
       parse(file, {
-        header: true,
-        complete: (result) => {
-          const parsedData = result.data as Record<string, unknown>[];
-          if (parsedData.length > 0) {
-            console.log('Parsed CSV data:', parsedData);
-            setHeaders(Object.keys(parsedData[0]));
-            setCsvData(parsedData);
-            setDialogOpen(true);
+        complete: (results) => {
+          const headers = results.meta.fields || [];
+          // Auto-detect lat/lon columns
+          const latColumn = findColumnByList(headers, latitude_list);
+          const lngColumn = findColumnByList(headers, longitude_list);
+          
+          if (latColumn && lngColumn) {
+            setSelectedLat(latColumn);
+            setSelectedLng(lngColumn);
           }
+          setCsvData(results.data as Record<string, unknown>[]);
+          setHeaders(headers);
+          setDialogOpen(true);
         },
-        error: (error) => {
-          console.error('Error parsing CSV:', error);
-          toast({
-            title: "Error",
-            description: "Failed to parse CSV file",
-            variant: "destructive",
-          });
-        }
+        header: true,
       });
     } else {
       toast({
         title: "Error",
-        description: "Unsupported file type",
+        description: "Unsupported file format",
         variant: "destructive",
       });
     }
-  }, [updateFeatures, toast]);
+  }, [toast, updateFeatures]);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -139,16 +128,17 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
           return null; 
         }
 
-        // Combine all other columns into a single content string
-        const content = headers
-          .filter(
-            (header) =>
-              header !== selectedLat &&
-              header !== selectedLng &&
-              header !== selectedName
-          )
-          .map((header) => `${header}: ${row[header]}`)
-          .join(", ");
+        // Combine all other columns into a object
+        const content = Object.fromEntries(
+          headers
+            .filter(
+              (header) =>
+                header !== selectedLat &&
+                header !== selectedLng &&
+                header !== selectedName
+            )
+            .map((header) => [header, row[header]])
+        );
 
         return {
           type: "Feature" as const,
@@ -158,7 +148,7 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
           },
           properties: {
             name: row[selectedName] || "point",
-            description: content
+            ...content
           },
           name: row[selectedName] as string || "point",
         };
@@ -174,24 +164,7 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
   };
 
   return (
-    <div className="absolute top-4 left-4 z-10">
-      {/* <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="default" size="icon">
-            <MenuIcon className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="m-2">
-          <DropdownMenuItem
-            onClick={() => {console.log("test")}}
-            className="cursor-pointer"
-          >
-            <UploadIcon className="mr-2 h-4 w-4" />
-            Upload File
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu> */}
-      
+    <div className="">      
       <Button
         variant="default"
         size="icon"
@@ -213,10 +186,10 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
           <Button style={{ display: "none" }}>Open Dialog</Button>
         </AlertDialogTrigger>
         <AlertDialogContent
-          className="bg-primary"
+          className=""
           aria-describedby="alert-dialog-description"
         >
-          <AlertDialogTitle>Edit</AlertDialogTitle>
+          <AlertDialogTitle>Add Data</AlertDialogTitle>
           <AlertDialogHeader>
             <h2>Select Fields</h2>
             <p>Please select the fields for Latitude, Longitude, and Name.</p>
@@ -294,11 +267,7 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <LayerPanel 
-        layers={layers}
-        onToggleLayer={toggleLayerVisibility}
-        onDeleteLayer={deleteLayer}
-      />
+      
     </div>
   );
 };

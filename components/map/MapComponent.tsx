@@ -1,7 +1,7 @@
 import { useEffect } from "react";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./map.css";
-import { GeoJSONFeature, Marker, MapComponentProps } from "./types";
+import { GeoJSONFeature, Marker, MapComponentProps } from "../type/types";
 import { useMapContext } from "../context/MapContext";
 
 const MapComponent: React.FC<MapComponentProps> = ({ markers }) => {
@@ -39,15 +39,6 @@ const MapComponent: React.FC<MapComponentProps> = ({ markers }) => {
       }
     };
   };
-
-  // Update features when markers change
-  useEffect(() => {
-    const features = markers
-      .map(markerToFeature)
-      .filter((feature): feature is GeoJSONFeature => feature !== null);
-  
-    updateFeatures(features, "markers");
-  }, [markers, updateFeatures]);
 
   return (
     <div className="relative w-full h-full">
