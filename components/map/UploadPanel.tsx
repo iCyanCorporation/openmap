@@ -174,24 +174,7 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
   };
 
   return (
-    <div className="">
-      {/* <DropdownMenu>
-        <DropdownMenuTrigger asChild>
-          <Button variant="default" size="icon">
-            <MenuIcon className="h-4 w-4" />
-          </Button>
-        </DropdownMenuTrigger>
-        <DropdownMenuContent className="m-2">
-          <DropdownMenuItem
-            onClick={() => {console.log("test")}}
-            className="cursor-pointer"
-          >
-            <UploadIcon className="mr-2 h-4 w-4" />
-            Upload File
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu> */}
-      
+    <div className="">      
       <Button
         variant="default"
         size="icon"

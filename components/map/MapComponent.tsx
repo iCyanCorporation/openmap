@@ -40,15 +40,6 @@ const MapComponent: React.FC<MapComponentProps> = ({ markers }) => {
     };
   };
 
-  // Update features when markers change
-  useEffect(() => {
-    const features = markers
-      .map(markerToFeature)
-      .filter((feature): feature is GeoJSONFeature => feature !== null);
-  
-    updateFeatures(features, "markers");
-  }, [markers, updateFeatures]);
-
   return (
     <div className="relative w-full h-full">
       <div id="map" className="absolute inset-0" />

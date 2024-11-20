@@ -11,6 +11,7 @@ interface MapContextType {
   layers: Layer[];
   toggleLayerVisibility: (id: string) => void;
   deleteLayer: (id: string) => void;
+  updateLayersOrder: (newLayers: Layer[]) => void;
 }
 
 interface Layer {
@@ -27,6 +28,7 @@ const MapContext = createContext<MapContextType>({
   layers: [],
   toggleLayerVisibility: () => {},
   deleteLayer: () => {},
+  updateLayersOrder: () => {},
 });
 
 interface MapProviderProps {
@@ -149,19 +151,34 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
       };
   
       // Add popup handlers
-      const handleMouseEnter = (e: maplibregl.MapMouseEvent & { features?: maplibregl.MapGeoJSONFeature[] }) => {
-        if (!e.features || !e.features[0]) return;
-        
-        const coordinates = e.features[0].geometry.type === 'Point' 
-          ? (e.features[0].geometry.coordinates as [number, number])
-          : e.lngLat;
-          
+      const handleMouseEnter = (e: any) => {
+        if (e.features.length === 0) return;
+
+        const coordinates = e.lngLat;
         const properties = e.features[0].properties;
-        const description = properties?.description || "No description available";
+  
+        const tableContent = Object.entries(properties)
+          .filter(([key]) => key !== 'description') // Exclude description field if you don't want it in the table
+          .map(([key, value]) => `
+            <tr class="border-b border-gray-200">
+              <td class="py-2 px-2 font-medium text-gray-700">${key}</td>
+              <td class="py-2 px-2 text-gray-600">${value}</td>
+            </tr>
+          `).join('');
+
+        const popupContent = `
+          <div class="min-w-[200px] max-w-[300px]">
+            <table class="w-full border-collapse">
+              <tbody>
+                ${tableContent}
+              </tbody>
+            </table>
+          </div>
+        `;
   
         newPopup
           .setLngLat(coordinates)
-          .setHTML(description)
+          .setHTML(popupContent)
           .addTo(newMap);
       };
 
@@ -294,7 +311,30 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
     });
   }, [map]);
 
-  const valueList = { map, updateFeatures, addFeature, layers, toggleLayerVisibility, deleteLayer };
+  const updateLayersOrder = useCallback((newLayers: Layer[]) => {
+    if (!map) return;
+
+    setLayers(newLayers);
+    const source = map.getSource("places") as GeoJSONSource;
+    if (source) {
+      const visibleLayers = newLayers.filter(layer => layer.visible);
+      const allFeatures = visibleLayers.flatMap(layer => layer.data);
+      source.setData({
+        type: "FeatureCollection",
+        features: allFeatures,
+      });
+    }
+  }, [map]);
+
+  const valueList = {
+    map,
+    updateFeatures,
+    addFeature,
+    layers,
+    toggleLayerVisibility,
+    deleteLayer,
+    updateLayersOrder,
+  };
 
   return (
     <MapContext.Provider value={valueList}>
