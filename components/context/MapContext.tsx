@@ -41,6 +41,19 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
   const [map, setMap] = useState<Map | null>(null);
   // const [popup, setPopup] = useState<Popup | null>(null);
   const [layers, setLayers] = useState<Layer[]>([]);
+  const [lastClickedCoords, setLastClickedCoords] = useState<[number, number] | null>(null);
+  const [hoveredPointId, setClickedPointId] = useState<string | null>(null);
+
+  // Function to reset hover state
+  const resetHoverState = useCallback(() => {
+    if (map && hoveredPointId) {
+      map.setFeatureState(
+        { source: 'places', id: hoveredPointId },
+        { hover: false }
+      );
+      setClickedPointId(null);
+    }
+  }, [map, hoveredPointId]);
 
   // Initialize map
   useEffect(() => {
@@ -54,7 +67,7 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
             type: 'raster',
             tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
             tileSize: 256,
-            attribution: '&copy; OpenStreetMap Contributors',
+            attribution: '&copy; OpenStreetMap',
           }
         },
         glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
@@ -90,18 +103,40 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
         },
       });
 
-      // Add a layer for point features
+      // Add a layer for points
       newMap.addLayer({
         id: "points",
         type: "circle",
         source: "places",
-        filter: ["==", ["geometry-type"], "Point"],
         paint: {
-          "circle-radius": 6,
-          "circle-color": "#007cbf",
-          "circle-stroke-width": 2,
-          "circle-stroke-color": "#ffffff",
+          'circle-radius': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            8,
+            ['boolean', ['feature-state', 'active'], false],
+            7,
+            6
+          ],
+          'circle-color': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            '#ff8800',
+            ['boolean', ['feature-state', 'active'], false],
+            '#ff0000',
+            '#4264fb'
+          ],
+          'circle-stroke-width': 2,
+          'circle-stroke-color': '#ffffff',
+          'circle-opacity': [
+            'case',
+            ['boolean', ['feature-state', 'hover'], false],
+            1,
+            ['boolean', ['feature-state', 'active'], false],
+            1,
+            0.7
+          ]
         },
+        filter: ["==", "$type", "Point"]
       });
 
       // Add a text layer for point labels
@@ -110,25 +145,25 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
         type: "symbol",
         source: "places",
         layout: {
-          "text-field": ["get", "name"], // Use the 'name' property from your source features
+          "text-field": ["get", "name"],
           "text-size": [
-            "interpolate",
-            ["linear"],
-            ["zoom"],
-            0,
-            8, // At zoom level 0, text size will be 8px
-            20,
-            24, // At zoom level 20, text size will be 24px
+        "interpolate",
+        ["linear"],
+        ["zoom"],
+        0,
+        8,
+        20,
+        24, 
           ],
-          "text-max-width": 12, // Adjust this value to control wrapping
+          "text-max-width": 12,
           "text-allow-overlap": false,
-          "text-anchor": "left", // Anchor the text above the circle
-          "text-offset": [1.0, 0.0], // Offset text vertically so it appears above the circle
+          "text-anchor": "left",
+          "text-offset": [1.0, 0.0],
         },
         paint: {
-          "text-color": "#000", // Text color
-          "text-halo-color": "#fff", // Halo (background) color
-          "text-halo-width": 2, // Halo width in pixels
+          "text-color": "#000",
+          "text-halo-color": "#fff",
+          "text-halo-width": 2,
           // "text-halo-blur": 1, // Optionally, add blur to the halo for a softer effect
         },
       });
@@ -151,64 +186,90 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
         },
       });
 
-      };
+    };
   
-      // Add popup handlers
-      const handleMouseEnter = (e: any) => {
-        if (e.features.length === 0) return;
+    // Add popup handlers
+    const handleClick = (e: any) => {
+      if (e.features.length === 0) return;
 
-        const coordinates = e.features[0].geometry.coordinates.slice();
-        const properties = e.features[0].properties;
+      const coordinates = e.features[0].geometry.coordinates.slice();
+      const properties = e.features[0].properties;
 
-        newPopup.setLngLat(coordinates)
-          .setHTML(`
-            <div style="max-height: 500px; overflow-y: auto; max-width: 300px; overflow-x: hidden;">
-              <table style="border-collapse: collapse; width: 100%;">
-                <tbody>
-                  ${Object.entries(properties)
-                    .filter(([key]) => key !== 'name')
-                    .map(([key, value]) => `
-                      <tr style="border-bottom: 1px solid #e5e7eb;">
-                        <td style="padding: 4px; color: #6b7280; font-size: 12px;">${key}</td>
-                        <td style="padding: 4px; font-size: 12px;">${value}</td>
-                      </tr>
-                    `).join('')}
-                </tbody>
-              </table>
-            </div>
-          `)
-          .addTo(newMap);
-      };
+      const popupContent = `
+        <div style="max-width: 300px; font-family: Arial, sans-serif;">
+          <table style="width: 100%; border-collapse: collapse;">
+            ${Object.entries(properties)
+              .filter(([key]) => key !== 'icon' && key !== 'id')
+              .map(([key, value]) => `
+                <tr style="border-bottom: 1px solid #eee;">
+                  <td style="padding: 4px; font-size: 12px; font-weight: bold; width: 30%;">${key}</td>
+                  <td style="padding: 4px; font-size: 12px; word-wrap: break-word; word-break: break-all; max-width: 200px;">${value}</td>
+                </tr>
+              `).join('')}
+          </table>
+        </div>
+      `;
 
-      const handleMouseLeave = () => {
+      newPopup.setLngLat(coordinates)
+        .setHTML(popupContent)
+        .addTo(newMap);
+    };
+
+    const handleMouseLeave = () => {
+      newPopup.remove();
+    };
+
+    // Add event listeners for points
+    newMap.on("click", "points", handleClick);
+
+    // Add click listener for map to close popup when clicking empty space
+    newMap.on("click", (e) => {
+      const features = newMap.queryRenderedFeatures(e.point, { layers: ["points"] });
+      if (features.length === 0) {
         newPopup.remove();
-      };
+      }
+    });
 
-      // Add event listeners for points
-      newMap.on("click", "points", handleMouseEnter);
+    // Change cursor on hover
+    newMap.on("click", "points", () => {
+      newMap.getCanvas().style.cursor = "pointer";
+    });
 
-      // Add click listener for map to close popup when clicking empty space
-      newMap.on("click", (e) => {
-        const features = newMap.queryRenderedFeatures(e.point, { layers: ["points"] });
-        if (features.length === 0) {
-          newPopup.remove();
+    newMap.on("mouseleave", "points", () => {
+      newMap.getCanvas().style.cursor = "";
+    });
+
+    const handlePointClick = (e: maplibregl.MapMouseEvent) => {
+      const features = newMap.queryRenderedFeatures(e.point, { layers: ['points'] });
+      if (features && features.length > 0) {
+        const clickedFeature = features[0];
+        
+        if (clickedFeature.geometry.type !== 'Point') return;
+        
+        const clickedCoords = (clickedFeature.geometry as GeoJSON.Point).coordinates as [number, number];
+        
+        // Reset the previous clicked point's state
+        if (lastClickedCoords) {
+          newMap.setFeatureState(
+            { source: 'places', id: lastClickedCoords.join('-') },
+            { active: false }
+          );
         }
-      });
 
-      // Add event listeners for polygons
-      // newMap.on("mouseenter", "polygons", handleMouseEnter);
-      // newMap.on("mouseleave", "polygons", handleMouseLeave);
+        // Set the new clicked point's state
+        newMap.setFeatureState(
+          { source: 'places', id: clickedCoords.join('-') },
+          { active: true }
+        );
+        
+        setLastClickedCoords(clickedCoords);
+      }
+    };
 
-      // Change cursor on hover
-      newMap.on("mouseenter", "points", () => {
-        newMap.getCanvas().style.cursor = "pointer";
-      });
+    // Add event listener for point clicks
+    newMap.on('click', 'points', handlePointClick);
 
-      newMap.on("mouseleave", "points", () => {
-        newMap.getCanvas().style.cursor = "";
-      });
-
-      newMap.on("load", setupMap);
+    newMap.on("load", setupMap);
     setMap(newMap);
     newMap.resize();
 
@@ -220,16 +281,62 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
       
       // Remove event listeners
       if (newMap.loaded()) {
-        newMap.off('mouseenter', 'points', handleMouseEnter);
+        newMap.off('click', 'points', handleClick);
         newMap.off('mouseleave', 'points', handleMouseLeave);
-        newMap.off('mouseenter', 'polygons', handleMouseEnter);
+        newMap.off('click', 'polygons', handleClick);
         newMap.off('mouseleave', 'polygons', handleMouseLeave);
+        newMap.off('click', 'points', handlePointClick);
       }
       
       newMap.remove();
     };
 
   }, []);
+
+  useEffect(() => {
+    if (!map) return;
+
+    const handleClick = (e: maplibregl.MapMouseEvent) => {
+      const features = map.queryRenderedFeatures(e.point, { layers: ['points'] });
+      if (features && features.length > 0) {
+        
+        const feature = features[0];
+        const featureId = (feature.id?.toString() || (feature.geometry as GeoJSON.Point).coordinates.join('-'));
+        
+        // Reset previous hover state
+        resetHoverState();
+        
+        // Set new hover state
+        map.setFeatureState(
+          { source: 'places', id: featureId },
+          { hover: true }
+        );
+        setClickedPointId(featureId);
+      }
+    };
+
+    const handleMouseEnter = () => {
+      map.getCanvas().style.cursor = 'pointer';
+    };
+
+    const handleMouseLeave = () => {
+      map.getCanvas().style.cursor = '';
+      resetHoverState();
+    };
+
+    // Change cursor to pointer when hovering over points
+    map.on('click', 'points', handleClick);
+    map.on('mouseenter', 'points', handleMouseEnter);
+    map.on('mouseleave', 'points', handleMouseLeave);
+
+    return () => {
+      if (map) {
+        map.off('click', 'points', handleClick);
+        map.off('mouseenter', 'points', handleMouseEnter);
+        map.off('mouseleave', 'points', handleMouseLeave);
+      }
+    };
+  }, [map, resetHoverState]);
 
   // Update features when they change
   const updateFeatures = useCallback((features: GeoJSONFeature[], layerName: string = 'Uploaded Data') => {
@@ -238,7 +345,10 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
     const newLayer: Layer = {
       id: Date.now().toString(),
       name: layerName,
-      data: features,
+      data: features.map(feature => ({
+        ...feature,
+        id: (feature.geometry as GeoJSON.Point).coordinates.join('-')
+      })),
       visible: true
     };
 
