@@ -1,5 +1,11 @@
-import React, { useState, useEffect } from "react";
+import React, { useCallback, useState, useEffect } from "react";
 import { parse } from "papaparse";
+
+import { Button } from "@/components/ui/button";
+import { useToast } from "@/hooks/use-toast";
+import { MenuIcon, UploadIcon } from "lucide-react";
+import { GeoJSONFeature, UploadPanelProps } from "./types";
+
 import {
   AlertDialog,
   AlertDialogTrigger,
@@ -18,9 +24,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import { Button } from "@/components/ui/button";
-import { MenuIcon, UploadIcon } from "lucide-react";
+
+type FeatureOrNull = GeoJSONFeature | null;
+
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -28,17 +34,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-import "maplibre-gl/dist/maplibre-gl.css";
+// add mapcontext here
+import { useMapContext } from "../context/MapContext";
 
-interface UploadPanelProps {
-  onFileUpload: (data: Record<string, unknown>[]) => void;
-}
-
-const latitude_list = ["latitude", "lat", "緯度"];
-const longitude_list = ["longitude", "lng", "lon", "経度"];
-
-const UploadPanel: React.FC<UploadPanelProps> = ({ onFileUpload }) => {
+const UploadPanel: React.FC<UploadPanelProps> = () => {
   const { toast } = useToast();
+  const { updateFeatures } = useMapContext();
 
   const [headers, setHeaders] = useState<string[]>([]);
   const [selectedLat, setSelectedLat] = useState<string | null>(null);
@@ -47,20 +48,79 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ onFileUpload }) => {
   const [csvData, setCsvData] = useState<Record<string, unknown>[]>([]);
   const [dialogOpen, setDialogOpen] = useState(false);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const uploadedFile = e.target.files?.[0];
-    if (uploadedFile) {
-      parse(uploadedFile, {
+
+
+  const processFile = useCallback((file: File) => {
+    const fileExtension = file.name.split('.').pop()?.toLowerCase();
+    
+    if (fileExtension === 'geojson' || fileExtension === 'json') {
+      console.log('Parsing GeoJSON file:', file);
+
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        try {
+          const jsonData = JSON.parse(event.target?.result as string);
+          if (jsonData.type === 'FeatureCollection' && Array.isArray(jsonData.features)) {
+            updateFeatures(jsonData.features);
+            toast({
+              title: "Success",
+              description: `Loaded ${jsonData.features.length} features from GeoJSON`,
+            });
+          } else if (jsonData.type === 'Feature') {
+            updateFeatures([jsonData]);
+            toast({
+              title: "Success",
+              description: "Loaded 1 feature from GeoJSON",
+            });
+          } else {
+            throw new Error('Invalid GeoJSON format');
+          }
+        } catch (error) {
+          console.error('Error parsing GeoJSON:', error);
+          toast({
+            title: "Error",
+            description: "Failed to parse GeoJSON file",
+            variant: "destructive",
+          });
+        }
+      };
+      reader.readAsText(file);
+    } else if (fileExtension === 'csv') {
+      console.log('Parsing CSV file:', file);
+
+      parse(file, {
         header: true,
         complete: (result) => {
           const parsedData = result.data as Record<string, unknown>[];
           if (parsedData.length > 0) {
+            console.log('Parsed CSV data:', parsedData);
             setHeaders(Object.keys(parsedData[0]));
             setCsvData(parsedData);
-            setDialogOpen(true); // Open dialog after successful file upload
+            setDialogOpen(true);
           }
         },
+        error: (error) => {
+          console.error('Error parsing CSV:', error);
+          toast({
+            title: "Error",
+            description: "Failed to parse CSV file",
+            variant: "destructive",
+          });
+        }
       });
+    } else {
+      toast({
+        title: "Error",
+        description: "Unsupported file type",
+        variant: "destructive",
+      });
+    }
+  }, [updateFeatures, toast]);
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (file) {
+      processFile(file);
     }
   };
 
@@ -93,69 +153,55 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ onFileUpload }) => {
           .join(", ");
 
         return {
-          lat,
-          lng,
-          name: row[selectedName],
-          content: content,
+          type: "Feature" as const,
+          geometry: {
+            type: "Point" as const,
+            coordinates: [lng, lat] as [number, number]
+          },
+          properties: {
+            name: row[selectedName] || "point",
+            description: content
+          },
+          name: row[selectedName] as string || "point",
         };
       });
 
       // Filter out any null values from invalid rows
       const validData = processedData.filter((data) => data !== null);
       if (validData.length > 0) {
-        onFileUpload(validData as Record<string, unknown>[]);
+        updateFeatures(validData);
       }
       setDialogOpen(false); // Close dialog after processing
     }
   };
 
-  useEffect(() => {
-    if (headers.length > 0) {
-      const latHeader = headers.find((header) =>
-        latitude_list.includes(header.toLowerCase())
-      );
-      const lngHeader = headers.find((header) =>
-        longitude_list.includes(header.toLowerCase())
-      );
-
-      if (latHeader) {
-        setSelectedLat(latHeader); // Automatically select latitude header
-      }
-      if (lngHeader) {
-        setSelectedLng(lngHeader); // Automatically select longitude header
-      }
-    }
-  }, [headers]);
-
   return (
-    <div className="absolute z-10 p-1" >
-      {/* Dropdown Menu with Menu Icon */}
+    <div className="absolute top-0 left-0 m-4 z-10">
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <button className="p-1 bg-white flex w-10 h-10 items-center justify-center rounded-full shadow-md hover:opacity-90">
-            <MenuIcon /> {/* Menu Icon */}
-          </button>
+          <Button variant="default" size="icon">
+            <MenuIcon className="h-4 w-4" />
+          </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent className="mx-1">
-          {/* Upload CSV Menu Item */}
+        <DropdownMenuContent className="m-2">
           <DropdownMenuItem
             onClick={() => document.getElementById("file-input")?.click()}
             className="cursor-pointer"
           >
-            <UploadIcon className="mr-2" />
-            Upload CSV
+            <UploadIcon className="mr-2 h-4 w-4" />
+            Upload File
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
 
-      {/* Hidden File Input */}
       <input
         id="file-input"
         type="file"
-        accept=".csv"
+        accept=".csv,.geojson,.json"
         onChange={handleFileChange}
         style={{ display: "none" }}
       />
+
 
       {/* Alert Dialog for Field Selection */}
       <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -163,7 +209,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ onFileUpload }) => {
           <Button style={{ display: "none" }}>Open Dialog</Button>
         </AlertDialogTrigger>
         <AlertDialogContent
-          className="bg-white"
+          className="bg-primary"
           aria-describedby="alert-dialog-description"
         >
           <AlertDialogTitle>Edit</AlertDialogTitle>
@@ -243,6 +289,7 @@ const UploadPanel: React.FC<UploadPanelProps> = ({ onFileUpload }) => {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
     </div>
   );
 };

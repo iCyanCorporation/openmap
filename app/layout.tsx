@@ -3,6 +3,9 @@ import localFont from "next/font/local";
 import "./globals.css";
 import { Toaster } from "@/components/ui/toaster";
 
+// context files
+import { MapContextProvider } from "@/components/context/MapContext";
+
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
@@ -29,7 +32,11 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased overflow-hidden`}
       >
-        <main>{children}</main>
+        <main>
+          <MapContextProvider>
+            {children}
+          </MapContextProvider>
+          </main>
         <Toaster />
       </body>
     </html>
