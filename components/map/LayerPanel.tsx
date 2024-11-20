@@ -1,6 +1,6 @@
 "use client"
 
-import React from 'react';
+import React, { useCallback } from 'react';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
@@ -98,7 +98,7 @@ const SortableItem = ({ id, name, dataLength, visible, onToggle, onDelete }: Sor
 };
 
 const LayerPanel: React.FC<LayerPanelProps> = () => {
-  const { updateFeatures, layers, toggleLayerVisibility, deleteLayer, updateLayersOrder } = useMapContext();
+  const { updateFeatures, layers, toggleLayerVisibility, deleteLayer, updateLayersOrder, map } = useMapContext();
   const [isOpen, setIsOpen] = React.useState(false);
   const [selectedBaseMap, setSelectedBaseMap] = React.useState<string[]>(["test1"]);
 
@@ -121,6 +121,58 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
       coordinateGetter: sortableKeyboardCoordinates,
     })
   );
+
+  const handleBaseMapChange = useCallback((value: string[]) => {
+    if (!map) return;
+
+    // Find removed layers (were in selectedBaseMap but not in value)
+    const removedLayers = selectedBaseMap.filter(id => !value.includes(id));
+    // Find added layers (in value but not in selectedBaseMap)
+    const addedLayers = value.filter(id => !selectedBaseMap.includes(id));
+
+    // Remove layers
+    removedLayers.forEach(id => {
+      const layerId = `layer-${id}`;
+      const sourceId = `source-${id}`;
+      if (map.getLayer(layerId)) {
+        map.removeLayer(layerId);
+      }
+      if (map.getSource(sourceId)) {
+        map.removeSource(sourceId);
+      }
+    });
+
+    // Add new layers
+    addedLayers.forEach(id => {
+      const baseMap = baseMaps.find(item => item.id === id);
+      if (!baseMap) return;
+
+      const sourceId = `source-${id}`;
+      const layerId = `layer-${id}`;
+
+      if (!map.getSource(sourceId)) {
+        map.addSource(sourceId, {
+          type: 'raster',
+          tiles: [baseMap.url],
+          tileSize: 256,
+        });
+      }
+
+      if (!map.getLayer(layerId)) {
+        map.addLayer({
+          id: layerId,
+          type: 'raster',
+          source: sourceId,
+          paint: {
+            'raster-opacity': 0.7
+          }
+        });
+      }
+    });
+
+    setSelectedBaseMap(value);
+    console.log("Selected base map:", value);
+  }, [map, selectedBaseMap]);
 
   function handleDragEnd(event: any) {
     const {active, over} = event;
@@ -154,14 +206,11 @@ const LayerPanel: React.FC<LayerPanelProps> = () => {
           </CardHeader>
           <CardContent className='space-y-2'>
           <ScrollArea className="">
-          <h2 className='font-semibold leading-none tracking-tight py-2'>Base Maps</h2>
+          <h2 className='font-semibold leading-none tracking-tight py-2'>Information</h2>
             <ToggleGroup 
               type="multiple" 
               value={selectedBaseMap}
-              onValueChange={(value: string[]) => {
-                setSelectedBaseMap(value);
-                console.log("Selected base map:", value);
-              }}
+              onValueChange={handleBaseMapChange}
               className="grid grid-cols-3 gap-2"
             >
               {baseMaps.map((item: BaseMapProps) => (
