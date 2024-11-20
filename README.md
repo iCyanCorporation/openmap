@@ -11,6 +11,14 @@ OpenMap is a web platform designed for testing and visualizing map data. Users c
 - **Hover Pop-ups**: View detailed information when hovering over each marker.
 - **Flexible Data Mapping**: Select which columns represent latitude, longitude, and name fields in your CSV file.
 
+## Stacks
+
+- [Next.js](https://nextjs.org/)
+- [MapLibre](https://maplibre.org/)
+- [React](https://reactjs.org/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [Shadcn UI](https://ui.shadcn.com/)
+
 ## Getting Started
 
 ### Prerequisites

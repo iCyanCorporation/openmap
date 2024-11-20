@@ -45,8 +45,8 @@ const MapComponent: React.FC<MapComponentProps> = ({ markers }) => {
     const features = markers
       .map(markerToFeature)
       .filter((feature): feature is GeoJSONFeature => feature !== null);
-
-    updateFeatures(features);
+  
+    updateFeatures(features, "markers");
   }, [markers, updateFeatures]);
 
   return (

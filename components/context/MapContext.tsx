@@ -1,19 +1,32 @@
 "use client"
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import maplibregl, { Map, GeoJSONSource, LngLatBounds, Popup } from 'maplibre-gl';
 import { GeoJSONFeature } from '../map/types';
 
 interface MapContextType {
   map: Map | null;
-  updateFeatures: (features: GeoJSONFeature[]) => void;
+  updateFeatures: (features: GeoJSONFeature[], layerName: string) => void;
   addFeature: (feature: GeoJSONFeature) => void;
+  layers: Layer[];
+  toggleLayerVisibility: (id: string) => void;
+  deleteLayer: (id: string) => void;
+}
+
+interface Layer {
+  id: string;
+  name: string;
+  data: GeoJSONFeature[];
+  visible: boolean;
 }
 
 const MapContext = createContext<MapContextType>({
   map: null,
   updateFeatures: () => {},
   addFeature: () => {},
+  layers: [],
+  toggleLayerVisibility: () => {},
+  deleteLayer: () => {},
 });
 
 interface MapProviderProps {
@@ -23,6 +36,7 @@ interface MapProviderProps {
 export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{children: React.ReactNode}) => {
   const [map, setMap] = useState<Map | null>(null);
   const [popup, setPopup] = useState<Popup | null>(null);
+  const [layers, setLayers] = useState<Layer[]>([]);
 
   // Initialize map
   useEffect(() => {
@@ -39,6 +53,7 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
             attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
           }
         },
+        glyphs: "https://fonts.openmaptiles.org/fonts/{fontstack}/{range}.pbf",
         layers: [{
           id: 'osm',
           type: 'raster',
@@ -113,7 +128,6 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
         },
       });
 
-
       // Add a layer for polygon features
       newMap.addLayer({
         id: "polygons",
@@ -150,11 +164,11 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
           .setHTML(description)
           .addTo(newMap);
       };
-  
+
       const handleMouseLeave = () => {
         newPopup.remove();
       };
-  
+
       // Add event listeners for points
       newMap.on("mouseenter", "points", handleMouseEnter);
       newMap.on("mouseleave", "points", handleMouseLeave);
@@ -193,57 +207,35 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
       newMap.remove();
     };
 
-    
   }, []);
 
   // Update features when they change
-  const updateFeatures = (features: GeoJSONFeature[]) => {
+  const updateFeatures = useCallback((features: GeoJSONFeature[], layerName: string = 'Uploaded Data') => {
     if (!map) return;
 
-    const source = map.getSource("places") as GeoJSONSource;
-    if (source) {
-      source.setData({
-        type: "FeatureCollection",
-        features,
-      });
+    const newLayer: Layer = {
+      id: Date.now().toString(),
+      name: layerName,
+      data: features,
+      visible: true
+    };
 
-      // Calculate bounds
-      if (features.length > 0) {
-        const bounds = new maplibregl.LngLatBounds();
-        let hasValidGeometry = false;
-
-        features.forEach((feature) => {
-          if (!feature.geometry) return;
-
-          switch (feature.geometry.type) {
-            case "Point":
-              console.log("Add point to bounds", feature.geometry.coordinates);
-              if (Array.isArray(feature.geometry.coordinates)) {
-                bounds.extend(feature.geometry.coordinates as [number, number]);
-                hasValidGeometry = true;
-              }
-              break;
-            case "Polygon":
-              console.log("Add polygon to bounds", feature.geometry.coordinates);
-              feature.geometry.coordinates[0].forEach((coord) => {
-                bounds.extend(coord as [number, number]);
-                hasValidGeometry = true;
-              });
-              break;
-          }
+    setLayers(prevLayers => {
+      const updatedLayers = [...prevLayers, newLayer];
+      const source = map.getSource("places") as GeoJSONSource;
+      if (source) {
+        const visibleLayers = updatedLayers.filter(layer => layer.visible);
+        const allFeatures = visibleLayers.flatMap(layer => layer.data);
+        source.setData({
+          type: "FeatureCollection",
+          features: allFeatures,
         });
-
-        if (hasValidGeometry) {
-          map.fitBounds(bounds, {
-            padding: { top: 50, bottom: 50, left: 50, right: 50 },
-            maxZoom: 15,
-          });
-        }
       }
-    }
-  };
+      return updatedLayers;
+    });
+  }, [map]);
 
-  const addFeature = (feature: GeoJSONFeature) => {
+  const addFeature = useCallback((feature: GeoJSONFeature) => {
     if (!map) return;
 
     const source = map.getSource("places") as GeoJSONSource;
@@ -256,40 +248,53 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
         features: [...currentFeatures, feature],
       });
     }
-  };
+  }, [map]);
 
-  // const createPolygonColor = (): maplibregl.PropertyValueSpecification<string> => {
-  //   const colorData = ["interpolate",
-  //     ["linear"],
-  //     ["length", ["get", "data"]], 500, "#e8f5a9", 600, "#e8f5a9"];
-
-  //   // for (let i = 0; i < 1000; i++) {
-  //   //   colorData.push(String(i));
-  //   //   // create a ramdom color ex #FF0000 #E8F5E9
-  //   //   const color = Math.floor(Math.random() * 16777215).toString(16);
-  //   //   colorData.push(`#${color}`);
-  //   // }
+  const toggleLayerVisibility = useCallback((id: string) => {
+    if (!map) return;
     
-  //   return colorData;
+    setLayers(prevLayers => {
+      const updatedLayers = prevLayers.map(layer => 
+        layer.id === id 
+          ? { ...layer, visible: !layer.visible }
+          : layer
+      );
+      
+      const source = map.getSource("places") as GeoJSONSource;
+      if (source) {
+        const visibleLayers = updatedLayers.filter(layer => layer.visible);
+        const allVisibleFeatures = visibleLayers.flatMap(layer => layer.data);
+        source.setData({
+          type: "FeatureCollection",
+          features: allVisibleFeatures,
+        });
+      }
+      
+      return updatedLayers;
+    });
+  }, [map]);
 
-  //   // return [
-  //   //   "interpolate",
-  //   //   ["linear"],
-  //   //   ["length", ["get", "data"]],
-  //   //   0, "#E8F5E9",  // Very light green
-  //   //   500, "#C8E6C9",
-  //   //   1000, "#A5D6A7",
-  //   //   1500, "#81C784",
-  //   //   2000, "#66BB6A",
-  //   //   2500, "#4CAF50",
-  //   //   3000, "#43A047",
-  //   //   3500, "#388E3C",
-  //   //   4000, "#2E7D32",
-  //   //   4500, "#1B5E20"  // Dark green
-  //   // ];
-  // };
+  const deleteLayer = useCallback((id: string) => {
+    if (!map) return;
+    
+    setLayers(prevLayers => {
+      const updatedLayers = prevLayers.filter(layer => layer.id !== id);
+      
+      const source = map.getSource("places") as GeoJSONSource;
+      if (source) {
+        const remainingVisibleLayers = updatedLayers.filter(layer => layer.visible);
+        const remainingFeatures = remainingVisibleLayers.flatMap(layer => layer.data);
+        source.setData({
+          type: "FeatureCollection",
+          features: remainingFeatures,
+        });
+      }
+      
+      return updatedLayers;
+    });
+  }, [map]);
 
-  const valueList = { map, updateFeatures, addFeature };
+  const valueList = { map, updateFeatures, addFeature, layers, toggleLayerVisibility, deleteLayer };
 
   return (
     <MapContext.Provider value={valueList}>

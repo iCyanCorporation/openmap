@@ -25,8 +25,6 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-type FeatureOrNull = GeoJSONFeature | null;
-
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -34,12 +32,12 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-// add mapcontext here
 import { useMapContext } from "../context/MapContext";
+import LayerPanel from './LayerPanel';
 
 const UploadPanel: React.FC<UploadPanelProps> = () => {
   const { toast } = useToast();
-  const { updateFeatures } = useMapContext();
+  const { updateFeatures, layers, toggleLayerVisibility, deleteLayer } = useMapContext();
 
   const [headers, setHeaders] = useState<string[]>([]);
   const [selectedLat, setSelectedLat] = useState<string | null>(null);
@@ -57,17 +55,17 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
       console.log('Parsing GeoJSON file:', file);
 
       const reader = new FileReader();
-      reader.onload = (event) => {
+      reader.onload = (event: ProgressEvent<FileReader>) => {
         try {
           const jsonData = JSON.parse(event.target?.result as string);
           if (jsonData.type === 'FeatureCollection' && Array.isArray(jsonData.features)) {
-            updateFeatures(jsonData.features);
+            updateFeatures(jsonData.features, file.name);
             toast({
               title: "Success",
               description: `Loaded ${jsonData.features.length} features from GeoJSON`,
             });
           } else if (jsonData.type === 'Feature') {
-            updateFeatures([jsonData]);
+            updateFeatures([jsonData], file.name);
             toast({
               title: "Success",
               description: "Loaded 1 feature from GeoJSON",
@@ -169,15 +167,15 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
       // Filter out any null values from invalid rows
       const validData = processedData.filter((data) => data !== null);
       if (validData.length > 0) {
-        updateFeatures(validData);
+        updateFeatures(validData, 'CSV Data');
       }
       setDialogOpen(false); // Close dialog after processing
     }
   };
 
   return (
-    <div className="absolute top-0 left-0 m-4 z-10">
-      <DropdownMenu>
+    <div className="absolute top-4 left-4 z-10">
+      {/* <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button variant="default" size="icon">
             <MenuIcon className="h-4 w-4" />
@@ -185,14 +183,22 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
         </DropdownMenuTrigger>
         <DropdownMenuContent className="m-2">
           <DropdownMenuItem
-            onClick={() => document.getElementById("file-input")?.click()}
+            onClick={() => {console.log("test")}}
             className="cursor-pointer"
           >
             <UploadIcon className="mr-2 h-4 w-4" />
             Upload File
           </DropdownMenuItem>
         </DropdownMenuContent>
-      </DropdownMenu>
+      </DropdownMenu> */}
+      
+      <Button
+        variant="default"
+        size="icon"
+        onClick={() => document.getElementById("file-input")?.click()}
+      >
+        <UploadIcon className="h-4 w-4" />
+      </Button>
 
       <input
         id="file-input"
@@ -202,8 +208,6 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
         style={{ display: "none" }}
       />
 
-
-      {/* Alert Dialog for Field Selection */}
       <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <AlertDialogTrigger asChild>
           <Button style={{ display: "none" }}>Open Dialog</Button>
@@ -290,6 +294,11 @@ const UploadPanel: React.FC<UploadPanelProps> = () => {
         </AlertDialogContent>
       </AlertDialog>
 
+      <LayerPanel 
+        layers={layers}
+        onToggleLayer={toggleLayerVisibility}
+        onDeleteLayer={deleteLayer}
+      />
     </div>
   );
 };
