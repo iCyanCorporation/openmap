@@ -12,6 +12,7 @@ interface MapContextType {
   toggleLayerVisibility: (id: string) => void;
   deleteLayer: (id: string) => void;
   updateLayersOrder: (newLayers: Layer[]) => void;
+  addLayer: (layer: Layer) => void;
 }
 
 interface Layer {
@@ -29,6 +30,7 @@ const MapContext = createContext<MapContextType>({
   toggleLayerVisibility: () => {},
   deleteLayer: () => {},
   updateLayersOrder: () => {},
+  addLayer: () => {},
 });
 
 interface MapProviderProps {
@@ -52,16 +54,17 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
             type: 'raster',
             tiles: ['https://tile.openstreetmap.org/{z}/{x}/{y}.png'],
             tileSize: 256,
-            attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            attribution: '&copy; OpenStreetMap Contributors',
           }
         },
-        glyphs: "https://fonts.openmaptiles.org/fonts/{fontstack}/{range}.pbf",
+        glyphs: "https://demotiles.maplibre.org/font/{fontstack}/{range}.pbf",
         layers: [{
           id: 'osm',
           type: 'raster',
           source: 'osm',
-          minzoom: 0,
-          maxzoom: 19
+          paint: {
+            'raster-opacity': 1
+          }
         }]
       },
       center: centerLocation,
@@ -69,7 +72,7 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
     });
 
     const newPopup = new maplibregl.Popup({
-      closeButton: false,
+      closeButton: true,
       closeOnClick: false
     });
 
@@ -154,31 +157,26 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
       const handleMouseEnter = (e: any) => {
         if (e.features.length === 0) return;
 
-        const coordinates = e.lngLat;
+        const coordinates = e.features[0].geometry.coordinates.slice();
         const properties = e.features[0].properties;
-  
-        const tableContent = Object.entries(properties)
-          .filter(([key]) => key !== 'description') // Exclude description field if you don't want it in the table
-          .map(([key, value]) => `
-            <tr class="border-b border-gray-200">
-              <td class="py-2 px-2 font-medium text-gray-700">${key}</td>
-              <td class="py-2 px-2 text-gray-600">${value}</td>
-            </tr>
-          `).join('');
 
-        const popupContent = `
-          <div class="min-w-[200px] max-w-[300px]">
-            <table class="w-full border-collapse">
-              <tbody>
-                ${tableContent}
-              </tbody>
-            </table>
-          </div>
-        `;
-  
-        newPopup
-          .setLngLat(coordinates)
-          .setHTML(popupContent)
+        newPopup.setLngLat(coordinates)
+          .setHTML(`
+            <div style="max-height: 500px; overflow-y: auto; max-width: 300px; overflow-x: hidden;">
+              <table style="border-collapse: collapse; width: 100%;">
+                <tbody>
+                  ${Object.entries(properties)
+                    .filter(([key]) => key !== 'name')
+                    .map(([key, value]) => `
+                      <tr style="border-bottom: 1px solid #e5e7eb;">
+                        <td style="padding: 4px; color: #6b7280; font-size: 12px;">${key}</td>
+                        <td style="padding: 4px; font-size: 12px;">${value}</td>
+                      </tr>
+                    `).join('')}
+                </tbody>
+              </table>
+            </div>
+          `)
           .addTo(newMap);
       };
 
@@ -187,8 +185,15 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
       };
 
       // Add event listeners for points
-      newMap.on("mouseenter", "points", handleMouseEnter);
-      newMap.on("mouseleave", "points", handleMouseLeave);
+      newMap.on("click", "points", handleMouseEnter);
+
+      // Add click listener for map to close popup when clicking empty space
+      newMap.on("click", (e) => {
+        const features = newMap.queryRenderedFeatures(e.point, { layers: ["points"] });
+        if (features.length === 0) {
+          newPopup.remove();
+        }
+      });
 
       // Add event listeners for polygons
       // newMap.on("mouseenter", "polygons", handleMouseEnter);
@@ -267,6 +272,48 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
     }
   }, [map]);
 
+  const addLayer = useCallback((layer: Layer) => {
+    if (!map) return;
+
+    // Remove existing layer and source if they exist
+    if (map.getLayer(layer.id)) {
+      map.removeLayer(layer.id);
+    }
+    if (map.getSource(layer.id)) {
+      map.removeSource(layer.id);
+    }
+
+    // Add source
+    map.addSource(layer.id, {
+      type: 'geojson',
+      data: {
+        type: 'FeatureCollection',
+        features: layer.data
+      }
+    });
+
+    // Find the highest layer ID that starts with 'layer-' (base maps)
+    const baseMapLayers = map.getStyle().layers
+      .filter(l => l.id.startsWith('layer-'))
+      .map(l => l.id);
+    
+    const beforeId = baseMapLayers.length > 0 ? baseMapLayers[0] : undefined;
+
+    // Add layer before the first base map layer (if any exist)
+    map.addLayer({
+      id: layer.id,
+      type: 'circle',
+      source: layer.id,
+      paint: {
+        'circle-radius': 6,
+        'circle-color': '#007cbf',
+        'circle-opacity': layer.visible ? 0.7 : 0
+      }
+    }, beforeId);
+
+    setLayers(prevLayers => [...prevLayers, layer]);
+  }, [map]);
+
   const toggleLayerVisibility = useCallback((id: string) => {
     if (!map) return;
     
@@ -311,19 +358,24 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
     });
   }, [map]);
 
-  const updateLayersOrder = useCallback((newLayers: Layer[]) => {
+  const updateLayersOrder = useCallback((newOrder: Layer[]) => {
     if (!map) return;
 
-    setLayers(newLayers);
-    const source = map.getSource("places") as GeoJSONSource;
-    if (source) {
-      const visibleLayers = newLayers.filter(layer => layer.visible);
-      const allFeatures = visibleLayers.flatMap(layer => layer.data);
-      source.setData({
-        type: "FeatureCollection",
-        features: allFeatures,
-      });
-    }
+    // Find the highest layer ID that starts with 'layer-' (base maps)
+    const baseMapLayers = map.getStyle().layers
+      .filter(l => l.id.startsWith('layer-'))
+      .map(l => l.id);
+    
+    const beforeId = baseMapLayers.length > 0 ? baseMapLayers[0] : undefined;
+
+    // Reorder layers in the map
+    newOrder.forEach((layer) => {
+      if (map.getLayer(layer.id)) {
+        map.moveLayer(layer.id, beforeId);
+      }
+    });
+
+    setLayers(newOrder);
   }, [map]);
 
   const valueList = {
@@ -334,6 +386,7 @@ export const MapContextProvider: React.FC<MapProviderProps> = ({ children }:{chi
     toggleLayerVisibility,
     deleteLayer,
     updateLayersOrder,
+    addLayer
   };
 
   return (
